@@ -1,0 +1,78 @@
+import streamlit as st
+import numpy as np
+from scipy.signal import butter, bilinear, lfilter
+import soundfile as sf
+import playsound
+
+def butter_bandpass (lowcut, highcut, fs, order=5):
+
+    nyquist = 0.5 * fs
+    low = lowcut / nyquist
+    high = highcut / nyquist
+    b, a = butter(order, [low, high], btype='band', analog=False)
+    return b, a
+
+def apply_bandpass_filter(signal, lowcut, highcut, sample_rate):
+    b, a = butter_bandpass(lowcut, highcut, sample_rate)
+    filtered_signal = lfilter(b, a, signal)
+    return filtered_signal
+
+def check_overlap(lowcut, highcut):
+    if lowcut > highcut:
+        print("¡Las frecuencias de corte inferior y superior se traslapan!")
+        return False
+    return True
+
+def apply_chorus(signal, delay_range, depth):
+    delay_samples = np.random.randint(
+        int(sample_rate * delay_range[0] / 1000),
+        int(sample_rate * delay_range[1] / 1000),
+        len(signal),
+    )
+
+    output_audio = np.zeros_like(signal)
+    for i in range(len(signal)):
+        delay = delay_samples[i]
+
+        output_audio[i] = signal[i] + depth * signal[max(0, i - delay)] if i - delay >= 0 else 0
+
+    return output_audio
+
+def apply_effects(audio, lowcut, highcut, delay_range, depth):
+
+    filtered_signal = apply_bandpass_filter(audio, lowcut, highcut, sample_rate)
+    output_audio = apply_chorus(filtered_signal, delay_range, depth)
+
+    return output_audio
+
+def get_user_input():
+
+    lowcut = st.number_input("Especifique la frecuencia de corte inferior 500 a 6500 Hz (en Hz): ", min=500, max=6500)
+    highcut = st.number_input("Especifique la frecuencia de corte superior 4000 a 15000 Hz (en Hz): ", min=4000, max=15000)
+    delay_range = st.slider("Especifique el rango de retardo (en milisegundos): ", min_value=10, max_value=200)
+    depth = st.slider("Especifique la profundidad del chorus (entre 0 y 1): ", min_value=0.0, max_value=1.0)
+
+    return delay_range, depth
+
+def main():
+
+    # Cargar el archivo de audio
+    input_audio_path = st.text_input("Ruta del archivo de audio:")
+
+    if input_audio_path:
+        audio, sample_rate = sf.read(input_audio_path)
+
+        # Obtener la entrada del usuario para los efectos
+        delay_range, depth = get_user_input()
+
+        # Aplicar los efectos al audio
+        output_audio = apply_effects(audio, lowcut, highcut, delay_range, depth)
+
+        # Reproducir el audio procesado
+        st.audio(output_audio, format="audio/wav")
+
+        # Descargar el audio procesado
+        st.download_button("Descargar audio procesado", output_audio, "output_audio.wav")
+
+if __name__ == "__main__":
+    main()
